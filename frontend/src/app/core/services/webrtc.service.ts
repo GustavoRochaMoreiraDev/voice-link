@@ -18,10 +18,15 @@ export class WebRTCService {
 
   private queuedCandidates: RTCIceCandidateInit[] = [];
   private isRemoteDescriptionSet = false;
+  private initializingPromise: Promise<RTCPeerConnection> | null = null;
 
   private iceServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' }
   ];
 
   isMuted = signal<boolean>(false);
@@ -113,68 +118,78 @@ export class WebRTCService {
       return this.peerConnection;
     }
 
-    this.peerConnection = new RTCPeerConnection({
-      iceServers: this.iceServers,
-      iceCandidatePoolSize: 2
-    });
+    if (this.initializingPromise) {
+      return this.initializingPromise;
+    }
 
-    this.isRemoteDescriptionSet = false;
+    this.initializingPromise = (async () => {
+      console.log('[WebRTC] Initializing new RTCPeerConnection...');
+      const pc = new RTCPeerConnection({
+        iceServers: this.iceServers,
+        iceCandidatePoolSize: 2
+      });
+      this.peerConnection = pc;
+      this.isRemoteDescriptionSet = false;
 
-    // Add local audio tracks
-    const stream = await this.acquireMedia();
-    stream.getAudioTracks().forEach((track) => {
-      if (this.peerConnection) {
-        console.log('[WebRTC] Adding local audio track to PeerConnection:', track.id);
-        this.peerConnection.addTrack(track, stream);
-      }
-    });
+      // Attach event listeners IMMEDIATELY before any async media operations
+      pc.ontrack = (event: RTCTrackEvent) => {
+        console.log('[WebRTC] Received remote audio track:', event.track.id, event.streams);
+        let remoteStream: MediaStream;
+        if (event.streams && event.streams[0]) {
+          remoteStream = event.streams[0];
+        } else {
+          remoteStream = new MediaStream([event.track]);
+        }
+        this.playRemoteStream(remoteStream);
+      };
 
-    // Handle incoming remote audio track
-    this.peerConnection.ontrack = (event: RTCTrackEvent) => {
-      console.log('[WebRTC] Received remote audio track:', event.track.id, event.streams);
+      pc.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+        if (event.candidate && event.candidate.candidate) {
+          console.log('[WebRTC] Gathered local ICE candidate:', event.candidate.candidate.substring(0, 45));
+          this.localIceCandidateSubject.next({
+            candidate: event.candidate.candidate,
+            sdpMid: event.candidate.sdpMid,
+            sdpMLineIndex: event.candidate.sdpMLineIndex
+          });
+        }
+      };
 
-      let remoteStream: MediaStream;
-      if (event.streams && event.streams[0]) {
-        remoteStream = event.streams[0];
-      } else {
-        remoteStream = new MediaStream([event.track]);
-      }
+      pc.onconnectionstatechange = () => {
+        console.log('[WebRTC] Connection state changed to:', pc.connectionState);
+        this.connectionState.set(pc.connectionState);
+      };
 
-      this.playRemoteStream(remoteStream);
-    };
+      pc.oniceconnectionstatechange = () => {
+        console.log('[WebRTC] ICE connection state changed to:', pc.iceConnectionState);
+        this.iceConnectionState.set(pc.iceConnectionState);
+      };
 
-    // ICE candidate gathering
-    this.peerConnection.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
-      if (event.candidate && event.candidate.candidate) {
-        this.localIceCandidateSubject.next({
-          candidate: event.candidate.candidate,
-          sdpMid: event.candidate.sdpMid,
-          sdpMLineIndex: event.candidate.sdpMLineIndex
+      // Add local audio tracks to peer connection
+      try {
+        const stream = await this.acquireMedia();
+        stream.getAudioTracks().forEach((track) => {
+          console.log('[WebRTC] Adding local audio track to PeerConnection:', track.id);
+          pc.addTrack(track, stream);
         });
+      } catch (err) {
+        console.error('[WebRTC] Failed to acquire local microphone in createPeerConnection:', err);
       }
-    };
 
-    // Connection state listeners
-    this.peerConnection.onconnectionstatechange = () => {
-      if (this.peerConnection) {
-        console.log('[WebRTC] Connection state changed to:', this.peerConnection.connectionState);
-        this.connectionState.set(this.peerConnection.connectionState);
-      }
-    };
+      return pc;
+    })();
 
-    this.peerConnection.oniceconnectionstatechange = () => {
-      if (this.peerConnection) {
-        console.log('[WebRTC] ICE connection state changed to:', this.peerConnection.iceConnectionState);
-        this.iceConnectionState.set(this.peerConnection.iceConnectionState);
-      }
-    };
-
-    return this.peerConnection;
+    try {
+      return await this.initializingPromise;
+    } finally {
+      this.initializingPromise = null;
+    }
   }
 
   private playRemoteStream(stream: MediaStream): void {
+    console.log('[WebRTC] Playing remote stream with', stream.getAudioTracks().length, 'audio track(s)');
+
     // 1. Play through HTMLAudioElement
-    if (!this.remoteAudioElement) {
+    if (!this.remoteAudioElement || !document.body.contains(this.remoteAudioElement)) {
       this.initAudioElement();
     }
 
@@ -182,15 +197,36 @@ export class WebRTCService {
       this.remoteAudioElement.srcObject = stream;
       this.remoteAudioElement.muted = false;
       this.remoteAudioElement.volume = 1.0;
-      this.remoteAudioElement.play()
-        .then(() => console.log('[WebRTC] Remote audio playback active'))
-        .catch((err) => console.warn('[WebRTC] HTMLAudio play blocked, AudioContext fallback will handle:', err));
+      
+      const playPromise = this.remoteAudioElement.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('[WebRTC] Remote audio playback active via HTMLAudioElement');
+          })
+          .catch((err) => {
+            console.warn('[WebRTC] HTMLAudioElement play blocked/failed:', err);
+            const resumeAudio = () => {
+              this.remoteAudioElement?.play().then(() => {
+                console.log('[WebRTC] Resumed audio playback on user gesture');
+              }).catch((e) => console.error('[WebRTC] Resume failed:', e));
+              if (this.audioContext && this.audioContext.state === 'suspended') {
+                this.audioContext.resume();
+              }
+              window.removeEventListener('click', resumeAudio);
+              window.removeEventListener('keydown', resumeAudio);
+            };
+            window.addEventListener('click', resumeAudio);
+            window.addEventListener('keydown', resumeAudio);
+          });
+      }
     }
 
-    // 2. Play through Web Audio API AudioContext destination (guaranteed audio routing)
+    // 2. Web Audio API ONLY for UI Volume Meter Analyser
+    // NOTE: We deliberately do NOT connect to audioContext.destination to avoid Chromium AEC muting/phasing.
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!this.audioContext) {
+      if (!this.audioContext || this.audioContext.state === 'closed') {
         this.audioContext = new AudioCtx();
       }
 
@@ -205,13 +241,9 @@ export class WebRTCService {
       this.remoteAnalyser.fftSize = 64;
       source.connect(this.remoteAnalyser);
 
-      // Connect directly to speakers/headphones output
-      source.connect(this.audioContext.destination);
-      console.log('[WebRTC] Stream connected to AudioContext destination');
-
       this.startAudioMeterMonitoring();
     } catch (e) {
-      console.warn('[WebRTC] Web Audio API routing warning:', e);
+      console.warn('[WebRTC] Web Audio API analyser setup warning:', e);
     }
   }
 
@@ -285,7 +317,10 @@ export class WebRTCService {
     this.isRemoteDescriptionSet = true;
     await this.drainQueuedCandidates();
 
-    const answer = await pc.createAnswer();
+    const answer = await pc.createAnswer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: false
+    });
     await pc.setLocalDescription(answer);
     return answer;
   }
@@ -448,6 +483,7 @@ export class WebRTCService {
     }
 
     this.isRemoteDescriptionSet = false;
+    this.initializingPromise = null;
     this.queuedCandidates = [];
     this.isMuted.set(false);
     this.connectionState.set('new');

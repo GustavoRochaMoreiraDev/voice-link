@@ -4,8 +4,10 @@
   "version": "1.0.0",
   "description": "Secure, private WebRTC peer-to-peer voice calling and real-time chat extension for Google Chrome.",
   "action": {
-    "default_popup": "index.html",
     "default_title": "VoiceLink"
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "permissions": [
     "storage",
@@ -16,9 +18,11 @@
     "http://localhost:8080/*",
     "ws://localhost:8080/*",
     "http://127.0.0.1:8080/*",
-    "ws://127.0.0.1:8080/*"
+    "ws://127.0.0.1:8080/*",
+    "https://*.ngrok-free.app/*",
+    "wss://*.ngrok-free.app/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:8080 ws://localhost:8080 http://127.0.0.1:8080 ws://127.0.0.1:8080 wss: https: stun: turn:;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:8080 ws://localhost:8080 http://127.0.0.1:8080 ws://127.0.0.1:8080 https://*.ngrok-free.app wss://*.ngrok-free.app wss: https: stun: turn:;"
   }
 }

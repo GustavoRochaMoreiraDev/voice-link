@@ -1,3 +1,4 @@
+import { environment } from '../../../environments/environment';
 import { Injectable, effect } from '@angular/core';
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 import { Subject, Observable } from 'rxjs';
@@ -10,7 +11,7 @@ import { SignalingMessage } from '../models/signaling.model';
 export class WebSocketService {
 
   private client: Client | null = null;
-  private readonly WS_URL = 'ws://localhost:8080/ws';
+  private readonly WS_URL = environment.wsUrl;
 
   private callEventsSubject = new Subject<any>();
   private signalingEventsSubject = new Subject<SignalingMessage>();

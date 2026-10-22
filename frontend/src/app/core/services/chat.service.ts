@@ -1,3 +1,4 @@
+import { environment } from '../../../environments/environment';
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -10,7 +11,7 @@ import { WebSocketService } from './websocket.service';
 })
 export class ChatService {
 
-  private readonly API_URL = 'http://localhost:8080/api/conversations';
+  private readonly API_URL = environment.apiUrl + '/conversations';
 
   conversations = signal<Conversation[]>([]);
   activeConversation = signal<Conversation | null>(null);

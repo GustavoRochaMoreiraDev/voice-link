@@ -14,9 +14,16 @@ target/
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+*.log*
 
 #test
 teste/
+
+#zip
+*.zip*
+
+#cmd
+*.cmd*
 
 #cache
 .angular/

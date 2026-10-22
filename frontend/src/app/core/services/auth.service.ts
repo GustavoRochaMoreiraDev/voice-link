@@ -1,3 +1,4 @@
+import { environment } from '../../../environments/environment';
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -9,7 +10,7 @@ import { ExtensionStorageService } from './extension-storage.service';
 })
 export class AuthService {
 
-  private readonly API_URL = 'http://localhost:8080/api/auth';
+  private readonly API_URL = environment.apiUrl + '/auth';
   private readonly TOKEN_KEY = 'voicelink_token';
   private readonly USER_KEY = 'voicelink_user';
 

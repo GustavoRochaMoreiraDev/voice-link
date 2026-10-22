@@ -1,3 +1,4 @@
+import { environment } from '../../../environments/environment';
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom, Subscription } from 'rxjs';
@@ -13,7 +14,7 @@ import { SignalingMessage } from '../models/signaling.model';
 })
 export class CallService {
 
-  private readonly API_URL = 'http://localhost:8080/api/calls';
+  private readonly API_URL = environment.apiUrl + '/calls';
 
   activeCall = signal<Call | null>(null);
   incomingCall = signal<Call | null>(null);
@@ -48,8 +49,9 @@ export class CallService {
 
     // Listen to local ICE candidates to forward to peer
     const subIce = this.webrtcService.localIceCandidate$.subscribe((cand) => {
-      const call = this.activeCall();
+      const call = this.activeCall() || this.incomingCall();
       if (call) {
+        console.log('[CallService] Sending ICE candidate for call', call.id);
         this.wsService.send('/app/call/signal', {
           callId: call.id,
           type: 'ICE_CANDIDATE',
@@ -57,6 +59,8 @@ export class CallService {
           sdpMid: cand.sdpMid,
           sdpMLineIndex: cand.sdpMLineIndex
         });
+      } else {
+        console.warn('[CallService] Local ICE candidate ignored: no active or incoming call');
       }
     });
     this.subscriptions.push(subIce);

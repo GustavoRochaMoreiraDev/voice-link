@@ -1,3 +1,4 @@
+import { environment } from '../../../environments/environment';
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
@@ -11,8 +12,8 @@ import { WebSocketService } from './websocket.service';
 })
 export class ContactService {
 
-  private readonly API_URL = 'http://localhost:8080/api/contacts';
-  private readonly USERS_URL = 'http://localhost:8080/api/users';
+  private readonly API_URL = environment.apiUrl + '/contacts';
+  private readonly USERS_URL = environment.apiUrl + '/users';
 
   contacts = signal<Contact[]>([]);
   pendingRequests = signal<Contact[]>([]);
