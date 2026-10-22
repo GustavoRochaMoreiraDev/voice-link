@@ -1,0 +1,66 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: voicelink-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/voicelink_db}
+    username: ${SPRING_DATASOURCE_USERNAME:voicelink}
+    password: ${SPRING_DATASOURCE_PASSWORD:voicelink}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+    open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:VoiceLinkSuperSecureJwtSecretKeyMustBeAtLeast256BitsLongForHmacSha256VoiceLinkKey2026}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000} # 24 hours
+  cors:
+    allowed-origins:
+      - "chrome-extension://*"
+      - "http://localhost:4200"
+      - "http://localhost:8080"
+      - "http://127.0.0.1:4200"
+  webrtc:
+    ice-servers:
+      - urls: "stun:stun.l.google.com:19302"
+      - urls: "stun:stun1.l.google.com:19302"
+      - urls: "${TURN_URL:turn:localhost:3478}"
+        username: "${TURN_USERNAME:voicelink}"
+        credential: "${TURN_PASSWORD:voicelinksecret}"
+
+logging:
+  level:
+    root: INFO
+    com.voicelink: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: standalone
+  datasource:
+    url: jdbc:h2:file:./data/voicelink;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  flyway:
+    enabled: false
+

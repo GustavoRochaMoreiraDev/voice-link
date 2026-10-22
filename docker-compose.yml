@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: voicelink-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-voicelink_db}
+      POSTGRES_USER: ${POSTGRES_USER:-voicelink}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voicelink_secret}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-voicelink} -d ${POSTGRES_DB:-voicelink_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voicelink-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-voicelink_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-voicelink}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-voicelink_secret}
+      JWT_SECRET: ${JWT_SECRET:-VoiceLinkSuperSecureJwtSecretKeyMustBeAtLeast256BitsLongForHmacSha256VoiceLinkKey2026}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      PORT: 8080
+      TURN_URL: ${TURN_URL:-turn:coturn:3478}
+      TURN_USERNAME: ${TURN_USERNAME:-voicelink}
+      TURN_PASSWORD: ${TURN_PASSWORD:-voicelinksecret}
+    ports:
+      - "8080:8080"
+
+  coturn:
+    image: coturn/coturn:latest
+    container_name: voicelink-coturn
+    restart: unless-stopped
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "49152-49160:49152-49160/udp"
+    volumes:
+      - ./infrastructure/coturn/turnserver.conf:/etc/turnserver.conf:ro
+    command: ["-c", "/etc/turnserver.conf"]
+
+volumes:
+  postgres_data:

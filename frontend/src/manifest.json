@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "VoiceLink - Voice Calls & Chat",
+  "version": "1.0.0",
+  "description": "Secure, private WebRTC peer-to-peer voice calling and real-time chat extension for Google Chrome.",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "VoiceLink"
+  },
+  "permissions": [
+    "storage",
+    "notifications",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:8080/*",
+    "ws://localhost:8080/*",
+    "http://127.0.0.1:8080/*",
+    "ws://127.0.0.1:8080/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:8080 ws://localhost:8080 http://127.0.0.1:8080 ws://127.0.0.1:8080 wss: https: stun: turn:;"
+  }
+}
